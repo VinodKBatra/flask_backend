@@ -1,7 +1,12 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from database import Database
-
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
@@ -66,6 +71,31 @@ def update_availability():
     request_no = request.json.get("request_no")
     db.update_availability(request_no)
     return jsonify({'message': 'Availability updated.'})
+
+@app.route('/send_bug_report', methods=['POST'])
+def send_bug_report():
+    EMAIL_ADDRESS = os.environ.get('BUG_REPORT_EMAIL')
+    EMAIL_PASSWORD = os.environ.get('BUG_REPORT_PASSWORD')
+    SMTP_SERVER = os.environ.get('BUG_REPORT_SMTP_SERVER', 'smtp.gmail.com')
+    SMTP_PORT = int(os.environ.get('BUG_REPORT_SMTP_PORT', 587))
+    data = request.get_json()
+    to_email = data.get('to')
+    message = data.get('message')
+    if not to_email or not message:
+        return jsonify({'error': 'Missing to or message'}), 400
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = to_email
+        msg['Subject'] = 'Bug Report from Kivy App'
+        msg.attach(MIMEText(message, 'plain'))
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return jsonify({'status': 'success'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)
